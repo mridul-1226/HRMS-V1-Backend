@@ -11,6 +11,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.core.mail import send_mail
 from django.conf import settings
 from django.core.cache import cache
+from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
 import authentication.firebase_init
 
 
@@ -51,14 +52,17 @@ class AuthView(APIView, BaseResponseMixin):
 
     def delete(self, request):
         try:
-            auth_header = request.headers.get('Authorization')
             emp_id = request.data.get('emp_id')
-            if not auth_header or not auth_header.startswith('Bearer '):
-                return self.error_response(error_message='Authorization token missing or invalid!', status_code=status.HTTP_401_UNAUTHORIZED)
-            token = auth_header.split(' ')[1]
-            validated_token = JWTAuthentication().get_validated_token(token)
+            user_auth = JWTAuthentication()
 
-            admin = JWTAuthentication().get_user(validated_token)
+            try:
+                auth_result = user_auth.authenticate(request)
+            except (InvalidToken, AuthenticationFailed):
+                return self.error_response(error_message='Authentication credentials were not provided or invalid.', status_code=status.HTTP_401_UNAUTHORIZED)
+            if not auth_result:
+                return self.error_response(error_message='Authentication credentials were not provided or invalid.', status_code=status.HTTP_401_UNAUTHORIZED)
+            admin = auth_result[0]
+
             if admin.user_type != 'admin':
                 return self.error_response(error_message='Only company admins can delete users.', status_code=status.HTTP_403_FORBIDDEN)
 

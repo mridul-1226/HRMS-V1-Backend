@@ -10,10 +10,9 @@ class CustomUser(AbstractUser):
     user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, default='employee')
     company = models.ForeignKey('Company', on_delete=models.CASCADE, null=True, blank=True)
     email = models.EmailField(unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
     profile_picture = models.URLField(max_length=200, blank=True, null=True)
     google_id = models.CharField(max_length=255, blank=True, null=True)
+    isInitialPassword = models.BooleanField(default=False)
     
     def __str__(self):
         return f"{self.username} ({self.user_type})"
@@ -23,10 +22,11 @@ class Company(models.Model):
     company_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     name = models.CharField(max_length=255)
     email = models.EmailField(unique=True)
-    industry = models.CharField(max_length=100, blank=True)
-    size = models.CharField(max_length=50, blank=True)
-    address = models.TextField(blank=True)
-    phone = models.CharField(max_length=15, blank=True)
+    industry = models.CharField(max_length=100)
+    size = models.CharField(max_length=20)
+    address = models.TextField()
+    countryCode = models.CharField(max_length=4, default='+91')
+    phone = models.CharField(max_length=15)
     logo = models.ImageField(upload_to='company_logos/', null=True, blank=True)
     tax_id = models.CharField(max_length=50, blank=True)
     website = models.URLField(blank=True)
