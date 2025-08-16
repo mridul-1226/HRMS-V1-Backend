@@ -6,8 +6,7 @@ import random
 import string
 from apis.models import Employee, Company
 from firebase_admin import auth
-from apis.views import BaseResponseMixin
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from apis.views import BaseResponseMixin, JWTAuth
 from django.core.mail import send_mail
 from django.conf import settings
 from django.core.cache import cache
@@ -53,15 +52,10 @@ class AuthView(APIView, BaseResponseMixin):
     def delete(self, request):
         try:
             emp_id = request.data.get('emp_id')
-            user_auth = JWTAuthentication()
 
-            try:
-                auth_result = user_auth.authenticate(request)
-            except (InvalidToken, AuthenticationFailed):
-                return self.error_response(error_message='Authentication credentials were not provided or invalid.', status_code=status.HTTP_401_UNAUTHORIZED)
-            if not auth_result:
-                return self.error_response(error_message='Authentication credentials were not provided or invalid.', status_code=status.HTTP_401_UNAUTHORIZED)
-            admin = auth_result[0]
+            admin, error = JWTAuth().check_jwt_token(request)
+            if admin is None:
+                return error
 
             if admin.user_type != 'admin':
                 return self.error_response(error_message='Only company admins can delete users.', status_code=status.HTTP_403_FORBIDDEN)
@@ -105,6 +99,7 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
             if created:
                 company = Company.objects.create(
                     name=name + "'s Company",
+                    ownerName=name,
                     email=email,
                 )
                 user.company = company
@@ -114,6 +109,7 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
                 if not user.company:
                     company = Company.objects.create(
                         name=name + "'s Company",
+                        ownerName=name,
                         email=email,
                     )
                     user.company = company
