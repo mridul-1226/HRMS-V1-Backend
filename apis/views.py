@@ -4,19 +4,20 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
 class BaseResponseMixin:
-    def success_response(self, data, status_code=status.HTTP_200_OK):
+    def success_response(self, data, status=status.HTTP_200_OK):
         return Response({
-            "status": status_code,
+            "status": status,
             "success": True,
             "data": data
-        }, status=status_code)
+        }, status=status)
 
-    def error_response(self, error_message, status_code=status.HTTP_400_BAD_REQUEST):
+    def error_response(self, error_message, status=status.HTTP_400_BAD_REQUEST):
+        print(error_message)
         return Response({
-            "status": status_code,
+            "status": status,
             "success": False,
             "error": error_message
-        }, status=status_code)
+        }, status=status)
     
 
 class JWTAuth(BaseResponseMixin):

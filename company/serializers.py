@@ -10,14 +10,13 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
         ]
         extra_kwargs = {
             'name': {'required': True},
-            'ownerName': {'required': True},
             'email': {'required': True},
             'industry': {'required': True},
             'size': {'required': True},
-            'address': {'required': True},
-            'countryCode': {'required': True},
+            'address': {'required': False},
+            'countryCode': {'required': False, 'allow_blank': True, 'default': '+91'},
             'phone': {'required': True},
-            'logo': {'required': False, 'allow_null': True, 'required': False},
+            'logo': {'required': False, 'allow_null': True},
             'tax_id': {'required': False, 'allow_null': True},
             'website': {'required': False, 'allow_null': True},
         }

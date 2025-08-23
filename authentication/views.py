@@ -16,17 +16,22 @@ import authentication.firebase_init
 
 User = get_user_model()
 
+# Login & user delete by admin API
 class AuthView(APIView, BaseResponseMixin):
 
     def post(self, request):
-        username = request.data.get('username')
+        email = request.data.get('email')
         password = request.data.get('password')
 
         try:
-            user = User.objects.get(username=username)
+            if email:
+                user = User.objects.get(email=email)
+            else:
+                return self.error_response(error_message='Username or Email is required!')
             if user.check_password(password):
                 refresh = RefreshToken.for_user(user)
                 user_type = user.user_type
+                company = user.company
                 return self.success_response(data={
                     'message': 'Login successful!',
                     'access_token': str(refresh.access_token),
@@ -38,6 +43,17 @@ class AuthView(APIView, BaseResponseMixin):
                         'profile_picture': user.profile_picture,
                         'type': user_type
                     },
+                    'company': {
+                        'company_id': company.id if company else None,
+                        'company_name': company.name if company else None,
+                        'industry': company.industry if company else None,
+                        'size': company.size if company else None,
+                        'address': company.address if company else None,
+                        'phone': f"{company.countryCode or ''}{company.phone or ''}" if company else None,
+                        'logo': company.logo.url if company and company.logo and hasattr(company.logo, 'url') else None,
+                        'tax_id': company.tax_id if company else None,
+                        'website': company.website if company else None,
+                    } if company else None,
                 })
             
             return self.error_response(error_message='Username or Password is incorrect!')
@@ -70,7 +86,7 @@ class AuthView(APIView, BaseResponseMixin):
             return self.error_response(error_message=f'Some error occurred: {e}', status_code=status.HTTP_400_BAD_REQUEST)
         
 
-
+# Google oAuth API
 class GoogleOAuthView(APIView, BaseResponseMixin):
     
     def post(self, request):
@@ -78,7 +94,7 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
 
         try:
             decoded_token = auth.verify_id_token(token)
-            uid = decoded_token["uid"]
+            uid = decoded_token.get("user_id") or decoded_token.get("uid")
             email = decoded_token.get("email")
             name = decoded_token.get("name")
             profile_picture = decoded_token.get("picture")
@@ -115,6 +131,8 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
                     user.company = company
                     user.save()
 
+            company = user.company
+
             refresh = RefreshToken.for_user(user)
             return self.success_response(data={
                 'message': 'Token verified successfully!',
@@ -125,9 +143,18 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
                     'email': user.email,
                     'name': user.first_name,
                     'profile_picture': user.profile_picture,
-                    'company_id': user.company.company_id if user.company else None,
-                    'company_name': user.company.name if user.company else None,
                     'username': user.username,
+                    'company': {
+                        'company_id': company.id if company else None,
+                        'company_name': company.name if company else None,
+                        'industry': company.industry if company else None,
+                        'size': company.size if company else None,
+                        'address': company.address if company else None,
+                        'phone': f"{company.countryCode or ''}{company.phone or ''}" if company else None,
+                        'logo': company.logo.url if company and company.logo and hasattr(company.logo, 'url') else None,
+                        'tax_id': company.tax_id if company else None,
+                        'website': company.website if company else None,
+                    } if company else None,
                 },
             })
         
@@ -148,6 +175,10 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
         return username
     
 
+
+    
+
+# Update password API
 class UpdatePasswordView(APIView, BaseResponseMixin):
 
     def post(self, request):
@@ -174,7 +205,7 @@ class UpdatePasswordView(APIView, BaseResponseMixin):
             return self.error_response(error_message=f'Some error occurred: {e}')
         
 
-
+# Send reset password mail
 class ResetPasswordView(APIView, BaseResponseMixin):
     def post(self, request):
         email = request.data.get('email')
@@ -218,6 +249,7 @@ class ResetPasswordView(APIView, BaseResponseMixin):
             return False
         
 
+# Verify reset password using OTP
 class ResetPasswordConfirmView(APIView, BaseResponseMixin):
     def post(self, request):
         id=request.get('user_id')

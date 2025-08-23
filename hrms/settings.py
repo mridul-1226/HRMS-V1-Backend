@@ -73,6 +73,7 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
+    'TOKEN_OBTAIN_PAIR_SERIALIZER': 'apis.serializers.MyTokenObtainPairSerializer',
 }
 
 AUTH_USER_MODEL = 'apis.CustomUser'
