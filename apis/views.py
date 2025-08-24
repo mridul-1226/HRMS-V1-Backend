@@ -5,6 +5,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 class BaseResponseMixin:
     def success_response(self, data, status=status.HTTP_200_OK):
+        print(data)
         return Response({
             "status": status,
             "success": True,

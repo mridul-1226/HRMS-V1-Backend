@@ -12,6 +12,8 @@ from django.conf import settings
 from django.core.cache import cache
 from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
 import authentication.firebase_init
+from apis.serializers import MyTokenObtainPairSerializer
+from company.serializers import CompanyDetailSerializer
 
 
 User = get_user_model()
@@ -27,15 +29,19 @@ class AuthView(APIView, BaseResponseMixin):
             if email:
                 user = User.objects.get(email=email)
             else:
-                return self.error_response(error_message='Username or Email is required!')
+                return self.error_response(error_message='Email is required!')
             if user.check_password(password):
-                refresh = RefreshToken.for_user(user)
+                print(user)
+                serializer = MyTokenObtainPairSerializer(data={'email': email, 'password': password, 'username': user.username})
+                serializer.is_valid(raise_exception=True)
+                tokens = serializer.validated_data
                 user_type = user.user_type
                 company = user.company
+                company_data = CompanyDetailSerializer(company).data if company else None
                 return self.success_response(data={
                     'message': 'Login successful!',
-                    'access_token': str(refresh.access_token),
-                    'refresh_token': str(refresh),
+                    'access_token': tokens['access'],
+                    'refresh_token': tokens['refresh'],
                     'user': {
                         'id': user.id,
                         'email': user.email,
@@ -43,17 +49,7 @@ class AuthView(APIView, BaseResponseMixin):
                         'profile_picture': user.profile_picture,
                         'type': user_type
                     },
-                    'company': {
-                        'company_id': company.id if company else None,
-                        'company_name': company.name if company else None,
-                        'industry': company.industry if company else None,
-                        'size': company.size if company else None,
-                        'address': company.address if company else None,
-                        'phone': f"{company.countryCode or ''}{company.phone or ''}" if company else None,
-                        'logo': company.logo.url if company and company.logo and hasattr(company.logo, 'url') else None,
-                        'tax_id': company.tax_id if company else None,
-                        'website': company.website if company else None,
-                    } if company else None,
+                    'company': company_data,
                 })
             
             return self.error_response(error_message='Username or Password is incorrect!')
@@ -132,30 +128,31 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
                     user.save()
 
             company = user.company
+            company_data = CompanyDetailSerializer(company).data if company else None
 
-            refresh = RefreshToken.for_user(user)
+            serializer = MyTokenObtainPairSerializer(data={'email': email, 'password': username if created else None, 'username': username if created else None})
+            if created:
+                serializer.is_valid(raise_exception=True)
+                tokens = serializer.validated_data
+            else:
+                refresh = MyTokenObtainPairSerializer.get_token(user)
+                tokens = {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token)
+                }
+
             return self.success_response(data={
                 'message': 'Token verified successfully!',
-                'access_token': str(refresh.access_token),
-                'refresh_token': str(refresh),
+                'access_token': tokens['access'],
+                'refresh_token': tokens['refresh'],
                 'user': {
                     'id': user.id,
                     'email': user.email,
                     'name': user.first_name,
                     'profile_picture': user.profile_picture,
                     'username': user.username,
-                    'company': {
-                        'company_id': company.id if company else None,
-                        'company_name': company.name if company else None,
-                        'industry': company.industry if company else None,
-                        'size': company.size if company else None,
-                        'address': company.address if company else None,
-                        'phone': f"{company.countryCode or ''}{company.phone or ''}" if company else None,
-                        'logo': company.logo.url if company and company.logo and hasattr(company.logo, 'url') else None,
-                        'tax_id': company.tax_id if company else None,
-                        'website': company.website if company else None,
-                    } if company else None,
                 },
+                'company': company_data,
             })
         
         except ValueError as e:

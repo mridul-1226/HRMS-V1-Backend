@@ -15,7 +15,7 @@ class CompanyView(JWTAuth, APIView):
 
             data = request.data
 
-            name = data.get('name')
+            name = data.get('ownerName')
             email = data.get('email')
             industry = data.get('industry')
             size = data.get('size')
@@ -43,23 +43,17 @@ class CompanyView(JWTAuth, APIView):
             
             serializer = CompanyDetailSerializer(company, data=request.data, partial=True)
             if serializer.is_valid():
-                print(3)
                 serializer.save()
-                print(2)
             else:
-                print(serializer.errors)
                 return self.error_response(error_message=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            print(company.id)
-            print(company.name)
-            print(company.email)
-            print(serializer.data)
-            
+            company_data = CompanyDetailSerializer(company).data
+
             return self.success_response({
                 "id": str(company.id),
                 "name": company.name,
                 "email": company.email,
-                "company_detail": serializer.data,
+                "company_detail": company_data,
                 'message': "Company details added successfully."
             }, status=status.HTTP_200_OK)
         
@@ -81,10 +75,12 @@ class CompanyView(JWTAuth, APIView):
             serializer = CompanyUpdateSerializer(company, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
+                company_data = CompanyDetailSerializer(company).data
                 return self.success_response({
                     "id": str(company.id),
                     "name": company.name,
                     "email": company.email,
+                    "company_detail": company_data,
                     'message': "Company updated successfully."
                 }, status=status.HTTP_200_OK)
             return self.error_response(error_message=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
