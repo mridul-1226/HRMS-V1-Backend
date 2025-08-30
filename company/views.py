@@ -3,15 +3,18 @@ from rest_framework.views import APIView
 from apis.views import JWTAuth
 from .serializers import CompanyUpdateSerializer, CompanyDetailSerializer
 from apis.views import JWTAuth
+from django.db import transaction
 
 
 class CompanyView(JWTAuth, APIView):
-
     def post(self, request):
         try:
             user, error = self.check_jwt_token(request)
             if user is None:
                 return error
+
+            # Optimize user fetch with related company if needed elsewhere
+            # user = User.objects.select_related('company').get(id=user.id)
 
             data = request.data
 
@@ -19,8 +22,6 @@ class CompanyView(JWTAuth, APIView):
             email = data.get('email')
             industry = data.get('industry')
             size = data.get('size')
-            address = data.get('address')
-            countryCode = data.get('countryCode')
             phone = data.get('phone')
 
             missing_fields = [field for field, value in {
@@ -41,25 +42,23 @@ class CompanyView(JWTAuth, APIView):
 
             company = user.company
             
-            serializer = CompanyDetailSerializer(company, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-            else:
-                return self.error_response(error_message=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            with transaction.atomic():
+                serializer = CompanyDetailSerializer(company, data=request.data, partial=True)
+                if serializer.is_valid():
+                    serializer.save()
+                else:
+                    return self.error_response(error_message=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
             company_data = CompanyDetailSerializer(company).data
 
             return self.success_response({
                 "id": str(company.id),
-                "name": company.name,
-                "email": company.email,
                 "company_detail": company_data,
                 'message': "Company details added successfully."
             }, status=status.HTTP_200_OK)
         
         except Exception as e:
             return self.error_response(error_message=f"Something went wrong: {e}")
-
 
     def patch(self, request):
         try:
@@ -72,18 +71,19 @@ class CompanyView(JWTAuth, APIView):
 
             company = user.company
 
-            serializer = CompanyUpdateSerializer(company, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                company_data = CompanyDetailSerializer(company).data
-                return self.success_response({
-                    "id": str(company.id),
-                    "name": company.name,
-                    "email": company.email,
-                    "company_detail": company_data,
-                    'message': "Company updated successfully."
-                }, status=status.HTTP_200_OK)
-            return self.error_response(error_message=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            with transaction.atomic():
+                serializer = CompanyUpdateSerializer(company, data=request.data, partial=True)
+                if serializer.is_valid():
+                    serializer.save()
+                    company_data = CompanyDetailSerializer(company).data
+                    return self.success_response({
+                        "id": str(company.id),
+                        "name": company.name,
+                        "email": company.email,
+                        "company_detail": company_data,
+                        'message': "Company updated successfully."
+                    }, status=status.HTTP_200_OK)
+                return self.error_response(error_message=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
         except Exception as e:
             return self.error_response(error_message=f"Something went wrong: {e}")

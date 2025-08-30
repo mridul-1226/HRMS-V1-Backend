@@ -5,7 +5,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
         fields = [
-            'name', 'ownerName', 'email', 'industry', 'size', 'address',
+            'id', 'name', 'ownerName', 'email', 'industry', 'size', 'address',
             'countryCode', 'phone', 'logo', 'tax_id', 'website'
         ]
         extra_kwargs = {
@@ -25,7 +25,7 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
         fields = [
-            'name', 'industry', 'size', 'address', 'countryCode',
+            'id', 'name', 'industry', 'size', 'address', 'countryCode',
             'phone', 'logo', 'tax_id', 'website'
         ]
         extra_kwargs = {field: {'required': False, 'allow_null': True} for field in fields}
