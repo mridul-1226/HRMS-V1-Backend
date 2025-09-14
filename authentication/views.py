@@ -11,7 +11,7 @@ from django.conf import settings
 from django.core.cache import cache
 import authentication.firebase_init
 from apis.serializers import MyTokenObtainPairSerializer
-from company.serializers import CompanyDetailSerializer
+from company.serializers import CompanyInfoSerializer
 from django.db import transaction
 
 
@@ -37,7 +37,7 @@ class AuthView(APIView, BaseResponseMixin):
                 serializer.is_valid(raise_exception=True)
                 tokens = serializer.validated_data
                 company = user.company
-                company_data = CompanyDetailSerializer(company).data if company else None
+                company_data = CompanyInfoSerializer(company).data if company else None
                 print(company)
                 return self.success_response(data={
                     'message': 'Login successful!',
@@ -133,7 +133,7 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
                         user.save()
 
             company = user.company
-            company_data = CompanyDetailSerializer(company).data if company else None
+            company_data = CompanyInfoSerializer(company).data if company else None
 
             serializer = MyTokenObtainPairSerializer(data={'email': email, 'password': username if created else None, 'username': username if created else None})
             if created:

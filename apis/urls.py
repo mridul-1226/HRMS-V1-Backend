@@ -10,5 +10,4 @@ urlpatterns = [
     path('auth/reset/otp/', ResetPasswordConfirmView.as_view(), name='reset-otp'),
     
     path('company/details/', CompanyView.as_view(), name='company-details'),
-    path('test/', CompanyView.as_view(), name='companies')
 ]

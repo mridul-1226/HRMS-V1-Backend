@@ -26,10 +26,10 @@ class Policy(models.Model):
         ('working_hours', 'Working Hours'),
     )
 
-    company = models.ForeignKey('apis.Company', on_delete=models.CASCADE, related_name='policies')
-    department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, blank=True, related_name='policies')
-    employee = models.ForeignKey('apis.Employee', on_delete=models.CASCADE, null=True, blank=True, related_name='policies')
-    type = models.CharField(max_length=50, choices=POLICY_TYPE_CHOICES)
+    company = models.ForeignKey('apis.Company', on_delete=models.CASCADE, related_name='policies', db_index=True)
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, blank=True, related_name='policies', db_index=True)
+    employee = models.ForeignKey('apis.Employee', on_delete=models.CASCADE, null=True, blank=True, related_name='policies', db_index=True)
+    type = models.CharField(max_length=50, choices=POLICY_TYPE_CHOICES, db_index=True)
     title = models.CharField(max_length=255)
     details = models.JSONField(default=dict, blank=True)
     effective_date = models.DateField(null=True, blank=True)
@@ -58,8 +58,10 @@ class Policy(models.Model):
 
     class Meta:
         unique_together = [
-            ('company', 'type', 'employee', 'department'),
+            ('company', 'type', 'employee', 'department', 'employee'),
         ]
         indexes = [
             models.Index(fields=['company', 'department', 'employee', 'type']),
+            models.Index(fields=['company', 'department', 'type']),
+            models.Index(fields=['company', 'type']),
         ]

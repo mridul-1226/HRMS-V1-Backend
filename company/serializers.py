@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from apis.models import Company
+from .models import Policy
 
-class CompanyDetailSerializer(serializers.ModelSerializer):
+class CompanyInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
         fields = [
@@ -21,11 +22,35 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
             'website': {'required': False, 'allow_null': True},
         }
 
-class CompanyUpdateSerializer(serializers.ModelSerializer):
+
+class PolicySerializer(serializers.ModelSerializer):
     class Meta:
-        model = Company
+        model = Policy
         fields = [
-            'id', 'name', 'industry', 'size', 'address', 'countryCode',
-            'phone', 'logo', 'tax_id', 'website'
+            'id', 'company', 'department', 'employee', 'type', 'title', 'details',
+            'effective_date', 'created_at', 'updated_at'
         ]
-        extra_kwargs = {field: {'required': False, 'allow_null': True} for field in fields}
+
+    def validate(self, attrs):
+        employee = attrs.get('employee')
+        department = attrs.get('department')
+        company = attrs.get('company')
+
+        if employee:
+            attrs['department'] = employee.department
+            attrs['company'] = employee.company
+        elif department:
+            attrs['company'] = department.company
+
+        if employee:
+            if department and employee.department != department:
+                raise serializers.ValidationError({'employee': 'Employee must belong to the specified department.'})
+            if company and employee.company != company:
+                raise serializers.ValidationError({'employee': 'Employee must belong to the specified company.'})
+        elif department:
+            if company and department.company != company:
+                raise serializers.ValidationError({'department': 'Department must belong to the specified company.'})
+        elif not company:
+            raise serializers.ValidationError({'company': 'This field is required.'})
+
+        return attrs
