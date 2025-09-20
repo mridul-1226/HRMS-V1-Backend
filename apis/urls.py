@@ -1,6 +1,6 @@
 from django.urls import path
 from authentication.views import GoogleOAuthView, AuthView, UpdatePasswordView, ResetPasswordView, ResetPasswordConfirmView
-from company.views import CompanyView
+from company.views import CompanyView, PolicyView
 
 urlpatterns = [
     path('auth/google/', GoogleOAuthView.as_view(), name='google_oauth'),
@@ -10,4 +10,5 @@ urlpatterns = [
     path('auth/reset/otp/', ResetPasswordConfirmView.as_view(), name='reset-otp'),
     
     path('company/details/', CompanyView.as_view(), name='company-details'),
+    path('company/policy/', PolicyView.as_view(), name='company-policy'),
 ]

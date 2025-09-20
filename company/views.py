@@ -96,17 +96,19 @@ class PolicyView(JWTAuth, APIView):
             if user is None:
                 return error
             
-            print(error)
-            if not getattr(user, 'user_type', None) != 'admin':
+            if getattr(user, 'user_type', None) != 'admin':
                 return self.error_response(error_message="Only admin can update policies.", status=status.HTTP_403_FORBIDDEN)
 
-            serializer = PolicySerializer(data=request.data)
+            data = request.data.get('policies')
+            print(request.data)
+            is_many = isinstance(data, list)
+            serializer = PolicySerializer(data=data, many=is_many)
             if serializer.is_valid():
                 serializer.save()
                 return self.success_response({
                     "policy": serializer.data,
-                    "message": "Policy saved successfully."
-                }, status=status.HTTP_201_CREATED)
+                    "message": "Policy(s) saved successfully."
+                })
             else:
                 return self.error_response(error_message=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -120,7 +122,7 @@ class PolicyView(JWTAuth, APIView):
             if user is None:
                 return error
 
-            if not getattr(user, 'user_type', None) != 'admin':
+            if getattr(user, 'user_type', None) != 'admin':
                 return self.error_response(error_message="Only admin can update policies.", status=status.HTTP_403_FORBIDDEN)
 
             data = request.data
@@ -187,47 +189,76 @@ class PolicyView(JWTAuth, APIView):
             user, error = self.check_jwt_token(request)
             if user is None:
                 return error
-
+            
             company = getattr(user, 'company', None)
             if not company:
                 return self.error_response(error_message="No company found for user.", status=status.HTTP_404_NOT_FOUND)
 
-            employee = getattr(user, 'employee', None)
-            department = getattr(employee, 'department', None) if employee else None
+            scope = request.query_params.get('scope')
+            scopeId = request.query_params.get('scope_id')
 
-            policy_types = dict(Policy.POLICY_TYPE_CHOICES).keys()
-            policies_result = []
+            if scope and scopeId:
+                if scope == 'company':
+                    if str(company.id) != str(scopeId):
+                        return self.error_response(error_message="Unauthorized access to company.", status=status.HTTP_403_FORBIDDEN)
+                    policies = Policy.objects.filter(company=company, department__isnull=True, employee__isnull=True)
+                elif scope == 'department':
+                    try:
+                        department = company.departments.get(id=scopeId)
+                    except company.departments.model.DoesNotExist:
+                        return self.error_response(error_message="Department not found.", status=status.HTTP_404_NOT_FOUND)
+                    policies = Policy.objects.filter(company=company, department=department, employee__isnull=True)
+                elif scope == 'employee':
+                    try:
+                        employee = company.employees.get(id=scopeId)
+                    except company.employees.model.DoesNotExist:
+                        return self.error_response(error_message="Employee not found.", status=status.HTTP_404_NOT_FOUND)
+                    policies = Policy.objects.filter(company=company, employee=employee)
+                else:
+                    return self.error_response(error_message="Invalid scope.", status=status.HTTP_400_BAD_REQUEST)
+                
+                serializer = PolicySerializer(policies, many=True)
+                return self.success_response({
+                    "policies": serializer.data,
+                    "message": "Policies fetched successfully."
+                }, status=status.HTTP_200_OK)
+            else:
+                employee = getattr(user, 'employee', None)
+                department = getattr(employee, 'department', None) if employee else None
 
-            for policy_type in policy_types:
-                policy = None
-                if employee:
-                    policy = Policy.objects.filter(
-                        company=company,
-                        employee=employee,
-                        type=policy_type
-                    ).select_related('department', 'employee').first()
-                if not policy and department:
-                    policy = Policy.objects.filter(
-                        company=company,
-                        department=department,
-                        employee__isnull=True,
-                        type=policy_type
-                    ).select_related('department').first()
-                if not policy:
-                    policy = Policy.objects.filter(
-                        company=company,
-                        department__isnull=True,
-                        employee__isnull=True,
-                        type=policy_type
-                    ).first()
-                if policy:
-                    policies_result.append(policy)
+                policy_types = dict(Policy.POLICY_TYPE_CHOICES).keys()
+                policies_result = []
 
-            serializer = PolicySerializer(policies_result, many=True)
-            return self.success_response({
-                "policies": serializer.data,
-                "message": "Policies fetched successfully."
-            }, status=status.HTTP_200_OK)
+                for policy_type in policy_types:
+                    policy = None
+                    if employee:
+                        policy = Policy.objects.filter(
+                            company=company,
+                            employee=employee,
+                            type=policy_type
+                        ).select_related('department', 'employee').first()
+                    if not policy and department:
+                        policy = Policy.objects.filter(
+                            company=company,
+                            department=department,
+                            employee__isnull=True,
+                            type=policy_type
+                        ).select_related('department').first()
+                    if not policy:
+                        policy = Policy.objects.filter(
+                            company=company,
+                            department__isnull=True,
+                            employee__isnull=True,
+                            type=policy_type
+                        ).first()
+                    if policy:
+                        policies_result.append(policy)
+
+                serializer = PolicySerializer(policies_result, many=True)
+                return self.success_response({
+                    "policies": serializer.data,
+                    "message": "Policies fetched successfully."
+                }, status=status.HTTP_200_OK)
 
         except Exception as e:
             return self.error_response(error_message=f"Something went wrong: {e}")

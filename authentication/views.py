@@ -8,6 +8,7 @@ from firebase_admin import auth
 from apis.views import BaseResponseMixin, JWTAuth
 from django.core.mail import send_mail
 from django.conf import settings
+from company.models import Policy
 from django.core.cache import cache
 import authentication.firebase_init
 from apis.serializers import MyTokenObtainPairSerializer
@@ -24,12 +25,9 @@ class AuthView(APIView, BaseResponseMixin):
         email = request.data.get('email')
         password = request.data.get('password')
 
-        print(request.data)
-
         try:
             if email:
                 user = User.objects.select_related('company').get(email=email)
-                print(user)
             else:
                 return self.error_response(error_message='Email is required!')
             if user.check_password(password):
@@ -38,7 +36,16 @@ class AuthView(APIView, BaseResponseMixin):
                 tokens = serializer.validated_data
                 company = user.company
                 company_data = CompanyInfoSerializer(company).data if company else None
-                print(company)
+                if user.user_type == 'admin':
+                    required_types = [choice[0] for choice in Policy.POLICY_TYPE_CHOICES if choice[0] != 'other']
+                    existing_types = Policy.objects.filter(
+                        company=company,
+                        employee__isnull=True,
+                        department__isnull=True,
+                        type__in=required_types
+                    ).values_list('type', flat=True).distinct()
+                    has_company_policy = all(t in existing_types for t in required_types) if company else False
+                
                 return self.success_response(data={
                     'message': 'Login successful!',
                     'access_token': tokens['access'],
@@ -52,6 +59,7 @@ class AuthView(APIView, BaseResponseMixin):
                     },
                     'company': company_data,
                     'role': user.user_type,
+                    'has_company_policy': has_company_policy if user.user_type == 'admin' else None,
                 })
             
             return self.error_response(error_message='Username or Password is incorrect!')
@@ -131,6 +139,15 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
                         )
                         user.company = company
                         user.save()
+                    
+                    required_types = [choice[0] for choice in Policy.POLICY_TYPE_CHOICES if choice[0] != 'other']
+                    existing_types = Policy.objects.filter(
+                        company=company,
+                        employee__isnull=True,
+                        department__isnull=True,
+                        type__in=required_types
+                    ).values_list('type', flat=True).distinct()
+                    has_company_policy = all(t in existing_types for t in required_types) if company else False
 
             company = user.company
             company_data = CompanyInfoSerializer(company).data if company else None
@@ -159,6 +176,7 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
                 },
                 'company': company_data,
                 'role': 'admin',
+                'has_company_policy': has_company_policy if not created else False,
             })
         
         except ValueError as e:

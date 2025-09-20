@@ -24,6 +24,7 @@ class Policy(models.Model):
         ('overtime', 'Overtime'),
         ('late', 'Late'),
         ('working_hours', 'Working Hours'),
+        ('other', 'Other'),
     )
 
     company = models.ForeignKey('apis.Company', on_delete=models.CASCADE, related_name='policies', db_index=True)
