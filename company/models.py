@@ -24,7 +24,7 @@ class Policy(models.Model):
         ('overtime', 'Overtime'),
         ('late', 'Late'),
         ('working_hours', 'Working Hours'),
-        ('other', 'Other'),
+        ('others', 'Others'),
     )
 
     company = models.ForeignKey('apis.Company', on_delete=models.CASCADE, related_name='policies', db_index=True)
@@ -59,7 +59,7 @@ class Policy(models.Model):
 
     class Meta:
         unique_together = [
-            ('company', 'type', 'employee', 'department', 'employee'),
+            ('company', 'type', 'employee', 'department'),
         ]
         indexes = [
             models.Index(fields=['company', 'department', 'employee', 'type']),

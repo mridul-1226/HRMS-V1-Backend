@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from apis.models import Company
-from .models import Policy
+from .models import Policy, Department
 
 class CompanyInfoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -52,5 +52,30 @@ class PolicySerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'department': 'Department must belong to the specified company.'})
         elif not company:
             raise serializers.ValidationError({'company': 'This field is required.'})
+
+        return attrs
+    
+
+class DepartmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Department
+        fields = ['id', 'company', 'name', 'leave_allotments', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'company': {'required': True},
+            'name': {'required': True},
+            'leave_allotments': {'required': True},
+        }
+
+    def validate(self, attrs):
+        company = attrs.get('company')
+        name = attrs.get('name')
+
+        if not company:
+            raise serializers.ValidationError({'company': 'This field is required.'})
+        if not name:
+            raise serializers.ValidationError({'name': 'This field is required.'})
+        
+        if Department.objects.filter(company=company, name=name).exists():
+            raise serializers.ValidationError({'name': 'Department with this name already exists in the company.'})
 
         return attrs

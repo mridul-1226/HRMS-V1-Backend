@@ -37,7 +37,7 @@ class AuthView(APIView, BaseResponseMixin):
                 company = user.company
                 company_data = CompanyInfoSerializer(company).data if company else None
                 if user.user_type == 'admin':
-                    required_types = [choice[0] for choice in Policy.POLICY_TYPE_CHOICES if choice[0] != 'other']
+                    required_types = [choice[0] for choice in Policy.POLICY_TYPE_CHOICES if choice[0] != 'others']
                     existing_types = Policy.objects.filter(
                         company=company,
                         employee__isnull=True,
@@ -45,7 +45,10 @@ class AuthView(APIView, BaseResponseMixin):
                         type__in=required_types
                     ).values_list('type', flat=True).distinct()
                     has_company_policy = all(t in existing_types for t in required_types) if company else False
+                    from company.models import Department
+                    departments = Department.objects.filter(company=company)
                 
+                departments_csv = ','.join([f"{dept.name}:{dept.id}" for dept in departments]) if user.user_type == 'admin' else None
                 return self.success_response(data={
                     'message': 'Login successful!',
                     'access_token': tokens['access'],
@@ -60,6 +63,7 @@ class AuthView(APIView, BaseResponseMixin):
                     'company': company_data,
                     'role': user.user_type,
                     'has_company_policy': has_company_policy if user.user_type == 'admin' else None,
+                    'departments': departments_csv,
                 })
             
             return self.error_response(error_message='Username or Password is incorrect!')
@@ -140,7 +144,7 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
                         user.company = company
                         user.save()
                     
-                    required_types = [choice[0] for choice in Policy.POLICY_TYPE_CHOICES if choice[0] != 'other']
+                    required_types = [choice[0] for choice in Policy.POLICY_TYPE_CHOICES if choice[0] != 'others']
                     existing_types = Policy.objects.filter(
                         company=company,
                         employee__isnull=True,
@@ -151,6 +155,9 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
 
             company = user.company
             company_data = CompanyInfoSerializer(company).data if company else None
+            from company.models import Department
+            departments = Department.objects.filter(company=company)
+            departments_csv = ','.join([f"{dept.name}:{dept.id}" for dept in departments]) if user.user_type == 'admin' else None
 
             serializer = MyTokenObtainPairSerializer(data={'email': email, 'password': username if created else None, 'username': username if created else None})
             if created:
@@ -177,6 +184,7 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
                 'company': company_data,
                 'role': 'admin',
                 'has_company_policy': has_company_policy if not created else False,
+                'departments': departments_csv,
             })
         
         except ValueError as e:

@@ -1,7 +1,7 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from apis.views import JWTAuth
-from .serializers import CompanyInfoSerializer, PolicySerializer
+from .serializers import CompanyInfoSerializer, PolicySerializer, DepartmentSerializer
 from apis.views import JWTAuth
 from django.db import transaction
 from .models import Policy
@@ -100,8 +100,42 @@ class PolicyView(JWTAuth, APIView):
                 return self.error_response(error_message="Only admin can update policies.", status=status.HTTP_403_FORBIDDEN)
 
             data = request.data.get('policies')
-            print(request.data)
             is_many = isinstance(data, list)
+
+            company = getattr(user, 'company', None)
+            if not company:
+                return self.error_response(error_message="No company found for user.", status=status.HTTP_404_NOT_FOUND)
+            from .models import Policy
+
+            def policy_exists(policy_data):
+                policy_type = policy_data.get('type')
+                department = policy_data.get('department')
+                employee = policy_data.get('employee')
+                filters = {'company': company, 'type': policy_type}
+                if employee:
+                    filters['employee'] = employee
+                elif department:
+                    filters['department'] = department
+                    filters['employee__isnull'] = True
+                else:
+                    filters['department__isnull'] = True
+                    filters['employee__isnull'] = True
+                return Policy.objects.filter(**filters).exists()
+
+            if is_many:
+                for policy_data in data:
+                    if policy_exists(policy_data):
+                        return self.error_response(
+                            error_message=f"A policy of type '{policy_data.get('type')}' already exists. Please update it to make changes.",
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+            else:
+                if policy_exists(data):
+                    return self.error_response(
+                        error_message=f"A policy of type '{data.get('type')}' already exists. Please update it to make changes.",
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
             serializer = PolicySerializer(data=data, many=is_many)
             if serializer.is_valid():
                 serializer.save()
@@ -204,14 +238,16 @@ class PolicyView(JWTAuth, APIView):
                     policies = Policy.objects.filter(company=company, department__isnull=True, employee__isnull=True)
                 elif scope == 'department':
                     try:
-                        department = company.departments.get(id=scopeId)
-                    except company.departments.model.DoesNotExist:
+                        from .models import Department
+                        department = Department.objects.get(id=scopeId, company=company)
+                    except Department.DoesNotExist:
                         return self.error_response(error_message="Department not found.", status=status.HTTP_404_NOT_FOUND)
                     policies = Policy.objects.filter(company=company, department=department, employee__isnull=True)
                 elif scope == 'employee':
                     try:
-                        employee = company.employees.get(id=scopeId)
-                    except company.employees.model.DoesNotExist:
+                        from apis.models import Employee
+                        employee = Employee.objects.get(id=scopeId, company=company)
+                    except Employee.DoesNotExist:
                         return self.error_response(error_message="Employee not found.", status=status.HTTP_404_NOT_FOUND)
                     policies = Policy.objects.filter(company=company, employee=employee)
                 else:
@@ -259,6 +295,37 @@ class PolicyView(JWTAuth, APIView):
                     "policies": serializer.data,
                     "message": "Policies fetched successfully."
                 }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return self.error_response(error_message=f"Something went wrong: {e}")
+        
+
+
+class DepartmentView(JWTAuth, APIView):
+    def post(self, request):
+        try:
+            user, error = self.check_jwt_token(request)
+            if user is None:
+                return error
+
+            if getattr(user, 'user_type', None) != 'admin':
+                return self.error_response(error_message="Only admin can add departments.", status=status.HTTP_403_FORBIDDEN)
+
+            company = getattr(user, 'company', None)
+            if not company:
+                return self.error_response(error_message="No company found for user.", status=status.HTTP_404_NOT_FOUND)
+
+            data = request.data
+
+            department = DepartmentSerializer(data=data)
+            if department.is_valid():
+                department.save(company=company)
+                return self.success_response({
+                    "department": department.data,
+                    "message": "Department created successfully."
+                }, status=status.HTTP_201_CREATED)
+            
+            return self.error_response(error_message=department.errors, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
             return self.error_response(error_message=f"Something went wrong: {e}")
