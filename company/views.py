@@ -2,9 +2,11 @@ from rest_framework import status
 from rest_framework.views import APIView
 from apis.views import JWTAuth
 from .serializers import CompanyInfoSerializer, PolicySerializer, DepartmentSerializer
-from apis.views import JWTAuth
 from django.db import transaction
 from .models import Policy
+from apis.models import CustomUser, Employee
+from django.contrib.auth import get_user_model
+
 
 
 class CompanyView(JWTAuth, APIView):
@@ -231,6 +233,8 @@ class PolicyView(JWTAuth, APIView):
             scope = request.query_params.get('scope')
             scopeId = request.query_params.get('scope_id')
 
+            print(f"Scope: {scope}, Scope ID: {scopeId}")
+
             if scope and scopeId:
                 if scope == 'company':
                     if str(company.id) != str(scopeId):
@@ -240,9 +244,12 @@ class PolicyView(JWTAuth, APIView):
                     try:
                         from .models import Department
                         department = Department.objects.get(id=scopeId, company=company)
+                        print(f"Department found: {department.name}")
                     except Department.DoesNotExist:
                         return self.error_response(error_message="Department not found.", status=status.HTTP_404_NOT_FOUND)
                     policies = Policy.objects.filter(company=company, department=department, employee__isnull=True)
+                    if not policies.exists():
+                        policies = Policy.objects.filter(company=company, department__isnull=True, employee__isnull=True)
                 elif scope == 'employee':
                     try:
                         from apis.models import Employee
@@ -329,3 +336,129 @@ class DepartmentView(JWTAuth, APIView):
 
         except Exception as e:
             return self.error_response(error_message=f"Something went wrong: {e}")
+
+
+        # TODO: Add PATCH and GET methods for DepartmentView if needed.
+class EmployeeView(JWTAuth, APIView):
+    def post(self, request):
+        try:
+            user, error = self.check_jwt_token(request)
+            if user is None:
+                    return error
+
+            if getattr(user, 'user_type', None) != 'admin':
+                return self.error_response(error_message="Only admin can add employees.", status=status.HTTP_403_FORBIDDEN)
+            
+            company = getattr(user, 'company', None)
+            if not company:
+                return self.error_response(error_message="No company found for user.", status=status.HTTP_404_NOT_FOUND)
+
+            data = request.data.copy()
+            print("Request data:", data)
+            print("Request data lengths:")
+            for k, v in data.items():
+                if isinstance(v, str):
+                    print(f"{k}: len={len(v)}")
+                elif isinstance(v, dict):
+                    print(f"{k}: json len={len(str(v))}")
+                else:
+                    print(f"{k}: not str or dict")
+            data['company'] = company.id
+
+            # Validate department exists in the company
+            department_name = data.get('department_name')
+            department = None
+            from .models import Department
+            try:
+                if department_name:
+                    department = Department.objects.get(name=department_name, company=company)
+            except Department.DoesNotExist:
+                return self.error_response(error_message="Department not found in your company.", status=status.HTTP_404_NOT_FOUND)
+            data['department'] = department.id if department else None
+
+            # Create CustomUser first
+            email = data.get('email')
+            name = data.get('name')
+            print("Name:", repr(name))
+            print("Name len:", len(name))
+            if not email or not name:
+                return self.error_response(error_message="Email and name are required.", status=status.HTTP_400_BAD_REQUEST)
+
+            if CustomUser.objects.filter(email=email).exists():
+                return self.error_response(error_message="Email already exists.", status=status.HTTP_400_BAD_REQUEST)
+            
+            with transaction.atomic():
+                username = self.generate_unique_username(name)
+                print("Generated username:", repr(username))
+                name_parts = name.split() if name else []
+                first_name = name_parts[0] if name_parts else ''
+                last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
+                user_data = {
+                    'username': username,
+                    'email': email,
+                    'first_name': first_name[:150],
+                    'last_name': last_name[:150],
+                    'user_type': 'employee',
+                    'company': company,
+                    'isInitialPassword': True,
+                }
+                print("First name value:", repr(user_data['first_name']))
+                print("First name len:", len(user_data['first_name']))
+                print("User data:", {k: repr(v) if isinstance(v, str) else v for k, v in user_data.items()})
+                self.send_email(
+                    subject="Your Account Credentials",
+                    message=f"{name.split()[0]}, your account has been created. Your login email is {email} and password is {username}. Please change your password after logging in.",
+                    recipient_email=email
+                )
+                User = get_user_model()
+                new_user = User.objects.create_user(**user_data)
+                print('dhweudhieddj')
+                new_user.set_password(username)
+                print("User created with id:", new_user.id, "username:", new_user.username)
+                data['user'] = new_user.id
+
+            from employee.serializers import EmployeeSerializer
+            print("Data before serializer:", data)
+            serializer = EmployeeSerializer(data=data)
+            if serializer.is_valid():
+                print("Serializer valid, validated_data:", serializer.validated_data)
+                serializer.save()
+                self.send_email(
+                    subject="Your Account Credentials",
+                    message=f"{name.split()[0]}, your account has been created. Your login email is {email} and password is {username}. Please change your password after logging in.",
+                    recipient_email=email
+                )
+                return self.success_response({
+                    "employee": serializer.data,
+                    "message": "Employee created successfully."
+                }, status=status.HTTP_201_CREATED)
+            raise serializer.ValidationError(serializer.errors)
+            
+        except Exception as e:
+            return self.error_response(error_message=f"Something went wrong: {e}")
+        
+
+    def generate_unique_username(self, name):
+        base_username = name.lower().replace(' ', '_')[:140] or 'user'
+        username = base_username
+        counter = 1
+        while CustomUser.objects.filter(username=username).exists():
+            username = f"{base_username}_{counter}"
+            counter += 1
+        return username
+    
+    def send_email(self, subject, message, recipient_email):
+        try:
+            from django.core.mail import send_mail
+            from django.conf import settings
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[recipient_email],
+                fail_silently=False,
+            )
+            return True
+        except Exception as e:
+            print(f"Email sending failed: {e}")
+            return False

@@ -7,7 +7,7 @@ class CustomUser(AbstractUser):
         ('admin', 'Company Admin'),
         ('employee', 'Employee'),
     )
-    user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, default='employee')
+    user_type = models.CharField(max_length=30, choices=USER_TYPE_CHOICES, default='employee')
     company = models.ForeignKey('Company', on_delete=models.CASCADE, null=True, blank=True, db_index=True)
     email = models.EmailField(unique=True)
     profile_picture = models.URLField(max_length=200, blank=True, null=True)
@@ -43,13 +43,14 @@ class Employee(models.Model):
         ('sales', 'Sales-Onfield'),
         ('office', 'In-Office'),
     )
-    employee_id = models.CharField(max_length=50, unique=True)
+    employee_id = models.CharField(max_length=150, unique=True)
     user = models.OneToOneField('CustomUser', on_delete=models.CASCADE, related_name='employee_profile')
     company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='employees', db_index=True)
-    department = models.ForeignKey('company.Department', on_delete=models.CASCADE, db_index=True, related_name='employees')
+    department = models.ForeignKey('company.Department', on_delete=models.SET_NULL, null=True, blank=True, db_index=True, related_name='employees')
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100, blank=True)
-    employee_type = models.CharField(max_length=10, choices=EMPLOYEE_TYPE_CHOICES, db_index=True)
+    salary = models.CharField(max_length=10, blank=True)
+    employee_type = models.CharField(max_length=30, choices=EMPLOYEE_TYPE_CHOICES, db_index=True)
     joining_date = models.DateField()
     phone = models.CharField(max_length=15, blank=True)
     address = models.TextField(blank=True)
