@@ -3,16 +3,14 @@ from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
 import random
 import string
-from apis.models import Employee, Company
+from apis.models import Employee, Company, Policy
 from firebase_admin import auth
 from apis.views import BaseResponseMixin, JWTAuth
 from django.core.mail import send_mail
 from django.conf import settings
-from company.models import Policy
 from django.core.cache import cache
 import authentication.firebase_init
-from apis.serializers import MyTokenObtainPairSerializer
-from company.serializers import CompanyInfoSerializer
+from apis.serializers import MyTokenObtainPairSerializer, CompanyInfoSerializer
 from django.db import transaction
 
 
@@ -45,7 +43,7 @@ class AuthView(APIView, BaseResponseMixin):
                         type__in=required_types
                     ).values_list('type', flat=True).distinct()
                     has_company_policy = all(t in existing_types for t in required_types) if company else False
-                    from company.models import Department
+                    from apis.models import Department
                     departments = Department.objects.filter(company=company)
                 
                 departments_csv = ','.join([f"{dept.name}:{dept.id}" for dept in departments]) if user.user_type == 'admin' else None
@@ -155,7 +153,7 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
 
             company = user.company
             company_data = CompanyInfoSerializer(company).data if company else None
-            from company.models import Department
+            from apis.models import Department
             departments = Department.objects.filter(company=company)
             departments_csv = ','.join([f"{dept.name}:{dept.id}" for dept in departments]) if user.user_type == 'admin' else None
 
