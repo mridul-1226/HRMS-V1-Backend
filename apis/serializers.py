@@ -77,15 +77,16 @@ class DepartmentSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-        company = attrs.get('company')
-        name = attrs.get('name')
+        company = attrs.get('company') or getattr(self.instance, 'company', None)
+        name = attrs.get('name') or getattr(self.instance, 'name', None)
 
         if not company:
             raise serializers.ValidationError({'company': 'This field is required.'})
         if not name:
             raise serializers.ValidationError({'name': 'This field is required.'})
-        
-        if Department.objects.filter(company=company, name=name).exists():
+
+        instance_id = self.instance.pk if self.instance else None
+        if Department.objects.filter(company=company, name=name).exclude(pk=instance_id).exists():
             raise serializers.ValidationError({'name': 'Department with this name already exists in the company.'})
 
         return attrs
@@ -103,9 +104,9 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
 
     def validate(self, attrs):
-        company = attrs.get('company')
-        department = attrs.get('department')
-        employee_type = attrs.get('employee_type')
+        company = attrs.get('company') or getattr(self.instance, 'company', None)
+        department = attrs.get('department') or getattr(self.instance, 'department', None)
+        employee_type = attrs.get('employee_type') or getattr(self.instance, 'employee_type', None)
 
         if not company:
             raise serializers.ValidationError({'company': 'This field is required.'})

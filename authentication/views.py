@@ -82,25 +82,28 @@ class AuthView(APIView, BaseResponseMixin):
                 return error
 
             if admin.user_type != 'admin':
-                return self.error_response(error_message='Only company admins can delete users.', status_code=status.HTTP_403_FORBIDDEN)
+                return self.error_response(error_message='Only company admins can delete users.', status=status.HTTP_403_FORBIDDEN)
 
             employee = Employee.objects.select_related('company', 'user').get(employee_id=emp_id)
             if employee.company != admin.company:
-                return self.error_response(error_message='You can only delete users from your own company.', status_code=status.HTTP_403_FORBIDDEN)
+                return self.error_response(error_message='You can only delete users from your own company.', status=status.HTTP_403_FORBIDDEN)
             
             with transaction.atomic():
                 user = employee.user
                 user.delete()
             return self.success_response(data={'message': 'User deleted successfully!'})
         except Exception as e:
-            return self.error_response(error_message=f'Some error occurred: {e}', status_code=status.HTTP_400_BAD_REQUEST)
+            return self.error_response(error_message=f'Some error occurred: {e}', status=status.HTTP_400_BAD_REQUEST)
         
 
 # Google oAuth API
 class GoogleOAuthView(APIView, BaseResponseMixin):
     
     def post(self, request):
-        token = request.data.get('id_token').strip()
+        token = request.data.get('id_token')
+        if not token:
+            return self.error_response(error_message='id_token is required', status=status.HTTP_400_BAD_REQUEST)
+        token = token.strip()
 
         try:
             decoded_token = auth.verify_id_token(token)
@@ -133,7 +136,8 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
                     user.set_password(username)
                     user.save()
                 else:
-                    if not user.company:
+                    company = user.company
+                    if not company:
                         company = Company.objects.create(
                             name=name + "'s Company",
                             ownerName=name,
@@ -186,10 +190,10 @@ class GoogleOAuthView(APIView, BaseResponseMixin):
             })
         
         except ValueError as e:
-            return self.error_response(error_message=f'Invalid Google token {e}', status_code=status.HTTP_400_BAD_REQUEST,)
+            return self.error_response(error_message=f'Invalid Google token {e}', status=status.HTTP_400_BAD_REQUEST)
         
         except Exception as e:
-            return self.error_response(error_message=f'{e}', status_code=status.HTTP_400_BAD_REQUEST,)
+            return self.error_response(error_message=f'{e}', status=status.HTTP_400_BAD_REQUEST)
             
     def generate_unique_username(self, name):
         base_username = name.lower().replace(' ', '_') or 'user'
@@ -286,6 +290,6 @@ class ResetPasswordConfirmView(APIView, BaseResponseMixin):
             cache.delete(f'otp_{user.id}')
             return self.success_response(data={'message': 'Password reset successfully'})
         except User.DoesNotExist:
-            return self.error_response(error_message='Invalid user', status_code=status.HTTP_400_BAD_REQUEST)
+            return self.error_response(error_message='Invalid user', status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return self.error_response(error_message=f'Some error occurred: {e}', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return self.error_response(error_message=f'Some error occurred: {e}', status=status.HTTP_500_INTERNAL_SERVER_ERROR)

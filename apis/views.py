@@ -450,7 +450,7 @@ class AttendanceView(JWTAuth, APIView):
             latitude = data.get('latitude')
             longitude = data.get('longitude')
 
-            if not latitude or not longitude:
+            if latitude is None or longitude is None:
                 return self.error_response(error_message="Location is required.", status=status.HTTP_400_BAD_REQUEST)
 
             today = timezone.now().date()
@@ -479,7 +479,7 @@ class AttendanceView(JWTAuth, APIView):
                 if attendance.check_in_location:
                     check_in_lat = attendance.check_in_location.get('lat')
                     check_in_lon = attendance.check_in_location.get('lon')
-                    if check_in_lat and check_in_lon:
+                    if check_in_lat is not None and check_in_lon is not None:
                         distance = geodesic((check_in_lat, check_in_lon), (latitude, longitude)).meters
                         if distance > 100:
                             return self.error_response(error_message="Check-out location must be within 100 meters of check-in location.", status=status.HTTP_400_BAD_REQUEST)
@@ -555,10 +555,13 @@ class EmployeeView(JWTAuth, APIView):
 
             # Validate department exists in the company
             department_name = data.get('department_name')
+            department_id = data.get('department')
             department = None
             try:
                 if department_name:
                     department = Department.objects.get(name=department_name, company=company)
+                elif department_id:
+                    department = Department.objects.get(id=department_id, company=company)
             except Department.DoesNotExist:
                 return self.error_response(error_message="Department not found in your company.", status=status.HTTP_404_NOT_FOUND)
             data['department'] = department.id if department else None
@@ -571,13 +574,20 @@ class EmployeeView(JWTAuth, APIView):
 
             if get_user_model().objects.filter(email=email).exists():
                 return self.error_response(error_message="Email already exists.", status=status.HTTP_400_BAD_REQUEST)
-            
+
+            name = name.strip()
+            name_parts = name.split() if name else []
+            first_name = name_parts[0] if name_parts else ''
+            last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
+
+            if not data.get('first_name'):
+                data['first_name'] = first_name
+            if not data.get('last_name'):
+                data['last_name'] = last_name
+
+            serializer = None
             with transaction.atomic():
                 username = self.generate_unique_username(name)
-                print("Generated username:", repr(username))
-                name_parts = name.split() if name else []
-                first_name = name_parts[0] if name_parts else ''
-                last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
                 user_data = {
                     'username': username,
                     'email': email,
@@ -587,29 +597,26 @@ class EmployeeView(JWTAuth, APIView):
                     'company': company,
                     'isInitialPassword': True,
                 }
-                self.send_email(
-                    subject="Your Account Credentials",
-                    message=f"{name.split()[0]}, your account has been created. Your login email is {email} and password is {username}. Please change your password after logging in.",
-                    recipient_email=email
-                )
                 User = get_user_model()
                 new_user = User.objects.create_user(**user_data)
                 new_user.set_password(username)
-                data['user'] = new_user.id
+                new_user.save()
 
-            serializer = EmployeeSerializer(data=data)
-            if serializer.is_valid():
+                data['user'] = new_user.id
+                serializer = EmployeeSerializer(data=data)
+                serializer.is_valid(raise_exception=True)
                 serializer.save()
-                self.send_email(
-                    subject="Your Account Credentials",
-                    message=f"{name.split()[0]}, your account has been created. Your login email is {email} and password is {username}. Please change your password after logging in.",
-                    recipient_email=email
-                )
-                return self.success_response({
-                    "employee": serializer.data,
-                    "message": "Employee created successfully."
-                }, status=status.HTTP_201_CREATED)
-            raise serializer.ValidationError(serializer.errors)
+
+            greeting_name = first_name or name
+            self.send_email(
+                subject="Your Account Credentials",
+                message=f"{greeting_name}, your account has been created. Your login email is {email} and password is {username}. Please change your password after logging in.",
+                recipient_email=email
+            )
+            return self.success_response({
+                "employee": serializer.data,
+                "message": "Employee created successfully."
+            }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
             return self.error_response(error_message=f"Something went wrong: {e}")
